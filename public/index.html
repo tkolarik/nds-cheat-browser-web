@@ -1,0 +1,75 @@
+<!-- public/index.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NDS Cheat Browser Web</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Custom CSS -->
+  <link href="styles.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+
+  <div class="container my-5">
+    <h1 class="mb-4 text-center">Nintendo DS Cheat Browser</h1>
+
+    <!-- Upload ROM Form -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5>Upload NDS ROM</h5>
+      </div>
+      <div class="card-body">
+        <form id="rom-form">
+          <div class="mb-3">
+            <label for="rom-file" class="form-label">Select NDS ROM (.nds):</label>
+            <input class="form-control" type="file" id="rom-file" accept=".nds" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Upload ROM</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Upload Delta SQLite Form -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5>Upload Delta Emulator SQLite</h5>
+      </div>
+      <div class="card-body">
+        <form id="delta-form">
+          <div class="mb-3">
+            <label for="delta-file" class="form-label">Select Delta SQLite (.sqlite):</label>
+            <input class="form-control" type="file" id="delta-file" accept=".sqlite" required>
+          </div>
+          <button type="submit" class="btn btn-secondary">Upload Delta SQLite</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Display Game Info -->
+    <div id="game-info" class="mb-4 d-none">
+      <h3 id="game-name"></h3>
+      <p><strong>GameID:</strong> <span id="game-id"></span></p>
+    </div>
+
+    <!-- Cheats Selection -->
+    <div id="cheats-section" class="mb-4 d-none">
+      <h4>Select Cheats to Enable:</h4>
+      <div id="cheats-container"></div>
+      <button id="generate-delta-btn" class="btn btn-success mt-3">Generate Delta Cheats SQLite</button>
+    </div>
+
+    <!-- Notifications -->
+    <div id="notifications" class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+      <div id="toast-container"></div>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS Bundle (includes Popper) -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Custom JS -->
+  <script src="main.js"></script>
+</body>
+</html>
