@@ -4,7 +4,15 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const crc = require('crc'); // CRC32 calculation
 const path = require('path');
+const crypto = require('crypto');
 
+/**
+ * Generates a GameID from the ROM file.
+ * This function uses 'ndstool' to extract the Game Code and calculates the JAMCRC.
+ *
+ * @param {string} romPath - Path to the ROM file.
+ * @returns {Promise<string>} - The generated GameID in the format "XXXX YYYYZZZZ".
+ */
 const generateGameID = async (romPath) => {
   try {
     const gameCode = await extractGameCode(romPath);
@@ -24,6 +32,12 @@ const generateGameID = async (romPath) => {
   }
 };
 
+/**
+ * Extracts the Game Code from the ROM using 'ndstool'.
+ *
+ * @param {string} romPath - Path to the ROM file.
+ * @returns {Promise<string>} - The extracted Game Code (e.g., "IPKE").
+ */
 const extractGameCode = (romPath) => {
   return new Promise((resolve, reject) => {
     execFile('ndstool', ['-i', romPath], (error, stdout, stderr) => {
@@ -56,6 +70,12 @@ const extractGameCode = (romPath) => {
   });
 };
 
+/**
+ * Calculates the JAMCRC from the ROM header.
+ *
+ * @param {string} romPath - Path to the ROM file.
+ * @returns {Promise<string>} - The calculated JAMCRC in hexadecimal format (e.g., "1234ABCD").
+ */
 const calculateJamCRC = (romPath) => {
   return new Promise((resolve, reject) => {
     fs.readFile(romPath, (err, data) => {
@@ -79,4 +99,21 @@ const calculateJamCRC = (romPath) => {
   });
 };
 
-module.exports = { generateGameID };
+/**
+ * Computes the SHA256 hash of a given file.
+ * This function is intended for generating a unique identifier for the uploaded delta.sqlite files.
+ *
+ * @param {string} filePath - Path to the file.
+ * @returns {Promise<string>} - The SHA256 hash as a hexadecimal string.
+ */
+const computeShasum = (filePath) => {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash('sha256');
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', err => reject(err));
+    stream.on('data', chunk => hash.update(chunk));
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+};
+
+module.exports = { generateGameID, computeShasum };

@@ -3,31 +3,70 @@
 /* Customize card headers */
 .card-header {
     background-color: #f8f9fa;
-  }
-  
-  /* Style for cheat checkboxes */
-  .cheat-checkbox {
+}
+
+/* Style for cheat checkboxes */
+.cheat-checkbox {
     margin-right: 10px;
-  }
-  
-  /* Style for cheat descriptions */
-  .cheat-description {
+}
+
+/* Style for bookmark checkboxes */
+.bookmark-checkbox {
+    margin-left: 15px;
+}
+
+/* Style for cheat descriptions */
+.cheat-description {
     margin-left: 25px;
-  }
-  
-  /* Style for code blocks */
-  .cheat-codes {
+}
+
+/* Style for cheat codes */
+.cheat-codes {
     background-color: #e9ecef;
     padding: 10px;
     border-radius: 5px;
     white-space: pre-wrap;
     word-wrap: break-word;
-  }
-  
-  /* Notifications */
-  .toast-container {
+}
+
+/* Toast Container */
+.toast-container {
     position: fixed;
     top: 20px;
     right: 20px;
-  }
-  
+}
+
+/* Collapsible toggle button icon rotation */
+.toggle-btn .bi-chevron-down {
+    transition: transform 0.3s ease;
+}
+
+.toggle-btn.collapsed .bi-chevron-down {
+    transform: rotate(-180deg);
+}
+
+/* Additional styles for browser.html */
+
+.folder {
+    border: 1px solid #dee2e6;
+    padding: 10px;
+    border-radius: 5px;
+}
+
+.cheat-item {
+    padding: 5px;
+}
+
+.cheat-item:hover {
+    background-color: #f1f1f1;
+}
+
+.form-check-label {
+    cursor: pointer;
+}
+
+.pre {
+    background-color: #f8f9fa;
+    padding: 10px;
+    border-radius: 5px;
+}
