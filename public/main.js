@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const cheatsContainer = document.getElementById('cheats-container');
     const generateDeltaBtn = document.getElementById('generate-delta-btn');
     const toastContainer = document.getElementById('toast-container');
+    const noCheatsFoundDiv = document.getElementById('no-cheats-found');
+    const parsedGameIdEl = document.getElementById('parsed-gameid');
   
     let currentGameID = '';
     let currentGameName = '';
@@ -60,17 +62,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
   
         const data = await response.json();
+  
         if (!response.ok) {
+          // Display error message
           showToast(data.error || 'Failed to upload ROM.', 'danger');
+  
+          if (data.gameid) {
+            // Display the parsed GameID
+            currentGameID = data.gameid;
+            parsedGameIdEl.textContent = currentGameID;
+            noCheatsFoundDiv.classList.remove('d-none');
+          } else {
+            // Hide any previous GameID display
+            noCheatsFoundDiv.classList.add('d-none');
+          }
+  
+          // Optionally, clear previous game info and cheats
+          gameInfoDiv.classList.add('d-none');
+          cheatsSection.classList.add('d-none');
+          cheatsContainer.innerHTML = '';
+  
           return;
         }
   
-        // Display Game Info
+        // Successful upload and cheats found
         currentGameID = data.gameid;
         currentGameName = data.game_name;
         gameNameEl.textContent = currentGameName;
         gameIdEl.textContent = currentGameID;
         gameInfoDiv.classList.remove('d-none');
+  
+        // Hide the "No Cheats Found" alert if previously shown
+        noCheatsFoundDiv.classList.add('d-none');
+        parsedGameIdEl.textContent = '';
   
         // Display Cheats
         currentCheats = data.folders;
