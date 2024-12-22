@@ -383,6 +383,59 @@ app.get('/debug-cheats', (req, res) => {
   res.json(getCheatsForGameID); // Adjusted to prevent exposing all cheats
 });
 
+// Endpoint to get bookmarks for a specific game
+app.get('/get-bookmarks', (req, res) => {
+  const { gameid } = req.query;
+  if (!gameid) {
+    return res.status(400).json({ error: 'Game ID is required.' });
+  }
+
+  try {
+    const bookmarks = dbBookmarks.prepare('SELECT cheat_name FROM bookmarks WHERE gameid = ?').all(gameid);
+    res.json({ bookmarks: bookmarks.map(b => b.cheat_name) });
+  } catch (error) {
+    console.error('Error fetching bookmarks:', error);
+    res.status(500).json({ error: 'Failed to fetch bookmarks.' });
+  }
+});
+
+// Endpoint to save bookmarks for a specific game
+app.post('/save-bookmarks', (req, res) => {
+  const { gameid, bookmarks } = req.body;
+  if (!gameid || !Array.isArray(bookmarks)) {
+    return res.status(400).json({ error: 'Invalid request data.' });
+  }
+
+  try {
+    dbBookmarks.transaction(() => {
+      // Clear existing bookmarks for the game
+      dbBookmarks.prepare('DELETE FROM bookmarks WHERE gameid = ?').run(gameid);
+
+      // Insert new bookmarks
+      const insert = dbBookmarks.prepare('INSERT INTO bookmarks (gameid, cheat_name) VALUES (?, ?)');
+      bookmarks.forEach(cheatName => {
+        insert.run(gameid, cheatName);
+      });
+    })();
+
+    res.json({ message: 'Bookmarks saved successfully.' });
+  } catch (error) {
+    console.error('Error saving bookmarks:', error);
+    res.status(500).json({ error: 'Failed to save bookmarks.' });
+  }
+});
+
+// Endpoint to get all bookmarked cheats across all games
+app.get('/api/bookmarks', (req, res) => {
+  try {
+    const allBookmarks = dbBookmarks.prepare('SELECT * FROM bookmarks').all();
+    res.json({ bookmarks: allBookmarks });
+  } catch (error) {
+    console.error('Error fetching all bookmarks:', error);
+    res.status(500).json({ error: 'Failed to fetch all bookmarks.' });
+  }
+});
+
 // Start the server
 const PORT = process.env.PORT || 5050;
 app.listen(PORT, () => {

@@ -187,17 +187,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
       cheats.forEach(cheat => {
         const isEnabled = cheat.is_enabled ? 'checked' : '';
-        const isBookmarked = cheat.is_bookmarked ? 'checked' : '';
         html += `
           <div class="cheat-item mb-3">
             <div class="form-check">
               <input class="form-check-input cheat-checkbox" type="checkbox" ${isEnabled} id="${sanitizeId(cheat.name)}" data-name="${cheat.name}" data-codes="${encodeURIComponent(cheat.codes)}">
               <label class="form-check-label" for="${sanitizeId(cheat.name)}">
                 ${cheat.name}
-              </label>
-              <input type="checkbox" class="form-check-input ms-3 bookmark-checkbox" id="bookmark-${sanitizeId(cheat.name)}" data-name="${cheat.name}">
-              <label class="form-check-label ms-1" for="bookmark-${sanitizeId(cheat.name)}">
-                Bookmark
               </label>
             </div>
             ${cheat.notes ? `<div class="cheat-description"><strong>Notes:</strong> ${cheat.notes}</div>` : ''}
@@ -294,6 +289,18 @@ document.addEventListener('DOMContentLoaded', () => {
         gameIdEl.textContent = currentGameID;
         gameInfoDiv.classList.remove('d-none');
 
+        // Fetch and merge bookmarks
+        const bookmarksResponse = await fetch(`/get-bookmarks?gameid=${encodeURIComponent(currentGameID)}`);
+        const bookmarksData = await bookmarksResponse.json();
+        const bookmarkedCheats = bookmarksData.bookmarks || [];
+
+        // Merge bookmarks with cheats
+        game.folders.forEach(folder => {
+          folder.cheats.forEach(cheat => {
+            cheat.is_bookmarked = bookmarkedCheats.includes(cheat.name);
+          });
+        });
+
         // Display Cheats
         currentCheats = game.folders;
         displayCheats(currentCheats);
@@ -307,58 +314,89 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     };
 
-    // Handle Bookmark Toggle
-    cheatsContainer.addEventListener('change', async (e) => {
-      if (e.target.classList.contains('bookmark-checkbox')) {
-        const cheatName = e.target.getAttribute('data-name');
-        const isBookmarked = e.target.checked;
+    // Add a new section for Bookmarks
+    const bookmarksSection = document.createElement('div');
+    bookmarksSection.id = 'bookmarks-section';
+    bookmarksSection.innerHTML = `
+        <h3>Bookmarked Cheats</h3>
+        <div id="bookmarks-container"></div>
+    `;
+    document.body.appendChild(bookmarksSection);
 
-        try {
-          // Fetch current bookmarks for the game
-          const response = await fetch(`/get-bookmarks?gameid=${encodeURIComponent(currentGameID)}`, {
-              method: 'GET',
-          });
-          const data = await response.json();
-          let bookmarks = data.bookmarks;
+    const bookmarksContainer = document.getElementById('bookmarks-container');
 
-          if (isBookmarked) {
-              if (!bookmarks.includes(cheatName)) {
-                  bookmarks.push(cheatName);
-              }
-          } else {
-              bookmarks = bookmarks.filter(name => name !== cheatName);
-          }
+    // Function to display bookmarks
+    const displayBookmarks = async () => {
+      try {
+        const response = await fetch('/api/bookmarks');
+        const data = await response.json();
 
-          // Save updated bookmarks
-          const saveResponse = await fetch('/save-bookmarks', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ gameid: currentGameID, bookmarks }),
-          });
-          const saveData = await saveResponse.json();
-
-          if (saveResponse.ok) {
-              showToast(`Cheat "${cheatName}" has been ${isBookmarked ? 'bookmarked' : 'removed from bookmarks'}.`, 'success');
-          } else {
-              showToast(saveData.error || 'Failed to update bookmarks.', 'danger');
-          }
-
-        } catch (error) {
-          console.error('Error updating bookmarks:', error);
-          showToast('An error occurred while updating bookmarks.', 'danger');
+        if (!response.ok) {
+          showToast(data.error || 'Failed to fetch bookmarks.', 'danger');
+          return;
         }
-      }
 
+        bookmarksContainer.innerHTML = '';
+
+        if (data.bookmarks.length === 0) {
+          bookmarksContainer.innerHTML = '<p>No bookmarked cheats found.</p>';
+          return;
+        }
+
+        const bookmarksList = document.createElement('ul');
+        data.bookmarks.forEach(bookmark => {
+          const listItem = document.createElement('li');
+          listItem.textContent = `${bookmark.cheat_name} (Game ID: ${bookmark.gameid})`;
+          bookmarksList.appendChild(listItem);
+        });
+        bookmarksContainer.appendChild(bookmarksList);
+      } catch (error) {
+        console.error('Error displaying bookmarks:', error);
+        showToast('An error occurred while displaying bookmarks.', 'danger');
+      }
+    };
+
+    // Call displayBookmarks on page load and after any bookmark changes
+    displayBookmarks();
+
+    // Handle Cheat Toggle and Automatic Bookmark Update
+    cheatsContainer.addEventListener('change', async (e) => {
       if (e.target.classList.contains('cheat-checkbox')) {
         const cheatName = e.target.getAttribute('data-name');
         const isEnabled = e.target.checked;
 
-        // Update the cheat status in the backend (if necessary)
-        // This requires implementing an endpoint to update cheat statuses
-        // For now, we'll assume that enabling/disabling cheats only affects the current session
-        // Alternatively, you can trigger re-generation of the Delta SQLite with updated cheats
+        // Update bookmark status based on whether the cheat is enabled
+        try {
+          const bookmarksResponse = await fetch(`/get-bookmarks?gameid=${encodeURIComponent(currentGameID)}`);
+          const bookmarksData = await bookmarksResponse.json();
+          let bookmarks = bookmarksData.bookmarks || [];
 
-        showToast(`Cheat "${cheatName}" has been ${isEnabled ? 'enabled' : 'disabled'}.`);
+          if (isEnabled) {
+            if (!bookmarks.includes(cheatName)) {
+              bookmarks.push(cheatName);
+            }
+          } else {
+            bookmarks = bookmarks.filter(name => name !== cheatName);
+          }
+
+          // Save updated bookmarks
+          const saveResponse = await fetch('/save-bookmarks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ gameid: currentGameID, bookmarks }),
+          });
+
+          if (saveResponse.ok) {
+            showToast(`Cheat "${cheatName}" has been ${isEnabled ? 'enabled and bookmarked' : 'disabled'}.`, 'success');
+            displayBookmarks(); // Refresh the bookmarks display
+          } else {
+            const saveData = await saveResponse.json();
+            showToast(saveData.error || 'Failed to update bookmarks.', 'danger');
+          }
+        } catch (error) {
+          console.error('Error updating bookmarks:', error);
+          showToast('An error occurred while updating bookmarks.', 'danger');
+        }
       }
     });
 });
