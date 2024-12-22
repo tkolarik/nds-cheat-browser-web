@@ -108,7 +108,7 @@ const calculateJamCRC = (romPath) => {
  */
 const computeShasum = (filePath) => {
   return new Promise((resolve, reject) => {
-    const hash = crypto.createHash('sha256');
+    const hash = crypto.createHash('sha1');
     const stream = fs.createReadStream(filePath);
     stream.on('error', err => reject(err));
     stream.on('data', chunk => hash.update(chunk));

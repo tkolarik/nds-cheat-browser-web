@@ -135,6 +135,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         showToast('Delta SQLite file uploaded and parsed successfully.');
 
+        // Optionally, refresh the cheats to reflect any changes
+        fetchCheats();
+
       } catch (error) {
         console.error('Error uploading Delta SQLite:', error);
         showToast('An error occurred while uploading the Delta SQLite file.', 'danger');
@@ -229,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }));
 
       const requestBody = {
-        gameid: currentGameID,
+        gameid: currentGameID, // This remains as GameID for cheat lookup
         game_name: currentGameName,
         selectedCheats: selectedCheats
       };
@@ -264,6 +267,45 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('An error occurred while generating the Delta SQLite.', 'danger');
       }
     });
+
+    // Function to fetch cheats (useful after uploading delta.sqlite)
+    const fetchCheats = async () => {
+      try {
+        const response = await fetch('/api/games');
+        const data = await response.json();
+
+        if (!response.ok) {
+          showToast(data.error || 'Failed to fetch cheats.', 'danger');
+          return;
+        }
+
+        if (data.games.length === 0) {
+          showToast('No games found in the database.', 'warning');
+          cheatsSection.classList.add('d-none');
+          cheatsContainer.innerHTML = '';
+          return;
+        }
+
+        // Assuming single game per session
+        const game = data.games[0];
+        currentGameID = game.gameid;
+        currentGameName = game.game_name;
+        gameNameEl.textContent = currentGameName;
+        gameIdEl.textContent = currentGameID;
+        gameInfoDiv.classList.remove('d-none');
+
+        // Display Cheats
+        currentCheats = game.folders;
+        displayCheats(currentCheats);
+        cheatsSection.classList.remove('d-none');
+
+        showToast('Cheats updated successfully.');
+
+      } catch (error) {
+        console.error('Error fetching cheats:', error);
+        showToast('An error occurred while fetching cheats.', 'danger');
+      }
+    };
 
     // Handle Bookmark Toggle
     cheatsContainer.addEventListener('change', async (e) => {

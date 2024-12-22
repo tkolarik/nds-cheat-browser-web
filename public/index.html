@@ -36,6 +36,15 @@
     <div class="container my-4">
         <h1 class="mb-4">Upload NDS ROM and Cheats</h1>
 
+        <!-- Upload ROM Form -->
+        <form id="rom-form" class="mb-4">
+            <div class="mb-3">
+                <label for="rom-file" class="form-label">Upload NDS ROM (.nds)</label>
+                <input class="form-control" type="file" id="rom-file" accept=".nds" required>
+            </div>
+            <button type="submit" class="btn btn-success">Upload ROM</button>
+        </form>
+
         <!-- Upload Delta Emulator SQLite Form -->
         <form id="delta-form" class="mb-4">
             <div class="mb-3">
@@ -43,15 +52,6 @@
                 <input class="form-control" type="file" id="delta-file" accept=".sqlite" required>
             </div>
             <button type="submit" class="btn btn-primary">Upload Delta SQLite</button>
-        </form>
-
-        <!-- Upload NDS ROM Form -->
-        <form id="rom-form" class="mb-4">
-            <div class="mb-3">
-                <label for="rom-file" class="form-label">Upload NDS ROM (.nds)</label>
-                <input class="form-control" type="file" id="rom-file" accept=".nds" required>
-            </div>
-            <button type="submit" class="btn btn-success">Upload ROM</button>
         </form>
 
         <!-- Parsed GameID Display -->
@@ -80,7 +80,7 @@
     </div>
 
     <!-- Toast Container -->
-    <div class="toast-container position-fixed top-0 end-0 p-3">
+    <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3">
         <!-- Toasts will be injected here -->
     </div>
 
