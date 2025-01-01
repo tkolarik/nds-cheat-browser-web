@@ -1,0 +1,93 @@
+classDiagram
+    class ROMData {
+        +path String
+        +header Bytes[512]
+        +gameCode String
+        +jamCrc String
+        +gameID (gameCode + jamCrc) String
+        +shasum (SHA1) String
+    }
+
+    class CheatsXML {
+        +name String
+        +gameid (gameCode + jamCrc) String
+        +date String
+    }
+
+    class Folder {
+        +folder_name String
+        +allowedon Number
+        +cheats List~Cheat~
+    }
+
+    class Cheat {
+        +name String
+        +notes String
+        +codes String
+        +is_enabled Boolean
+        +is_bookmarked Boolean
+    }
+
+    class DeltaSQLiteGame {
+        +Z_PK Number
+        +ZIDENTIFIER (shasum) String
+    }
+
+    class DeltaSQLiteCheat {
+        +Z_PK Number
+        +ZGAME Number
+        +ZISENABLED Number
+        +ZCODE String
+        +ZNAME String
+        +ZTYPE Buffer
+    }
+
+    class BookmarkRecord {
+        +id Number
+        +gameid (shasum) String
+        +cheat_name String
+        +cheat_code String
+    }
+
+    class UserDeltaMemory {
+        +shasum (SHA1) String
+        +cheatCode String
+        +name String
+        +is_enabled Boolean
+    }
+
+    class APIGameResponse {
+        +gameid (shasum) String
+        +game_name String
+        +folders List~Folder~
+    }
+
+    class APICheatResponse {
+        +name String
+        +notes String
+        +codes String
+        +is_enabled Boolean
+        +is_bookmarked Boolean
+    }
+
+    CheatsXML "1" --> "*" Folder : contains
+    Folder "1" --> "*" Cheat : contains
+    DeltaSQLiteGame "1" --> "*" DeltaSQLiteCheat : has
+    APIGameResponse "1" --> "*" Folder : contains
+    Folder "1" --> "*" APICheatResponse : contains
+    ROMData --> CheatsXML : lookupBy_gameID (gameCode + jamCrc)
+    ROMData --> DeltaSQLiteGame : lookupBy_shasum (SHA1)
+    DeltaSQLiteCheat --> UserDeltaMemory : parsedTo
+    UserDeltaMemory --> APICheatResponse : mergedInto
+    BookmarkRecord --> APICheatResponse : mergedInto
+
+    note for ROMData "Represents an uploaded .nds ROM file.\nParses header for gameCode and jamCrc.\nUses SHA1 hash for identification."
+    note for CheatsXML "Parsed from /data/cheats.xml at startup.\nContains game elements with gameid (gameCode + jamCrc)."
+    note for Folder "Groups cheats under a game with properties and Cheat objects."
+    note for Cheat "Contains cheat code and metadata including name, notes, codes, and states."
+    note for DeltaSQLiteGame "Game entry in delta.sqlite ZGAME table.\nZIDENTIFIER is ROM shasum (SHA1)."
+    note for DeltaSQLiteCheat "Cheat entry in delta.sqlite with enabled state, code, and game reference."
+    note for BookmarkRecord "User-saved bookmark with gameid (shasum), cheat name, and code."
+    note for UserDeltaMemory "In-memory mapping of cheats from delta.sqlite.\nKeyed by shasum (SHA1)."
+    note for APIGameResponse "JSON response for /upload-rom with game details and folders.\ngameid is shasum (SHA1)."
+    note for APICheatResponse "JSON cheat representation with merged XML, Delta, and bookmark data."
