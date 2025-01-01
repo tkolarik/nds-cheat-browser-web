@@ -68,8 +68,8 @@ const modifyDeltaDatabase = async (deltaDbPath, shasum, selectedCheats) => {
                     pkCounter += 1;
                     insertCheat.run(
                         pkCounter, // Z_PK
-                        1, // Z_ENT
-                        2, // Z_OPT
+                        1, // Z_ENT - Correctly set to 1
+                        2, // Z_OPT - Correctly set to 2
                         cheat.is_enabled ? 1 : 0, // ZISENABLED
                         zGamePk, // ZGAME
                         now, // ZCREATIONDATE

@@ -63,19 +63,54 @@
         <div id="game-info" class="d-none">
             <h2>Game Information</h2>
             <p><strong>Name:</strong> <span id="game-name"></span></p>
-            <p><strong>GameID:</strong> <span id="game-id"></span></p>
+            <p><strong>Cheats XML GameID:</strong> <span id="game-id"></span></p>
+            <p><strong>Delta.sqlite Game Identifier:</strong> <span id="game-identifier"></span></p>
         </div>
 
         <!-- Cheats Section -->
-        <div id="cheats-section" class="d-none">
-            <h2>Cheats</h2>
-            <div id="cheats-container"></div>
-            <button id="generate-delta-btn" class="btn btn-secondary mt-3">Generate Delta Cheats SQLite</button>
+        <div id="cheats-section" class="d-none row">
+            <!-- Sidebar for Folders -->
+            <div class="col-md-4">
+                <div id="folder-sidebar" class="sticky-top">
+                    <!-- Folder list will be inserted here -->
+                </div>
+            </div>
+            <!-- Main Content for Cheats -->
+            <div class="col-md-8">
+                <div id="cheats-container"></div>
+                <button id="generate-delta-btn" class="btn btn-secondary mt-3">Generate Delta Cheats SQLite</button>
+            </div>
         </div>
 
         <!-- No Cheats Found Alert -->
         <div id="no-cheats-found" class="alert alert-warning d-none" role="alert">
             No cheats found for the uploaded GameID: <strong id="parsed-gameid"></strong>
+        </div>
+
+        <!-- Bookmarks Section -->
+        <div id="bookmarks-section" class="mt-4">
+            <h3>Bookmarked Cheats</h3>
+            <div id="bookmarks-container"></div>
+        </div>
+
+        <!-- Cheats Table -->
+        <div id="cheats-table-section" class="mt-4">
+            <h3>Cheats Table</h3>
+            <table id="cheats-table" class="table">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Notes</th>
+                        <th>Code</th>
+                        <th>Enabled</th>
+                        <th>Bookmarked</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Cheats table rows will be inserted here -->
+                </tbody>
+            </table>
         </div>
     </div>
 

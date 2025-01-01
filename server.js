@@ -61,12 +61,44 @@ dbBookmarks.exec(`
   CREATE TABLE IF NOT EXISTS bookmarks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     gameid TEXT NOT NULL,
-    cheat_name TEXT NOT NULL
+    cheat_name TEXT NOT NULL,
+    cheat_code TEXT NOT NULL
   );
 `);
 
+// Helper function to format cheat codes
+const formatCheatCodes = (codes) => {
+    // Ensure the cheat codes string is not null or undefined
+    if (codes === null || codes === undefined) {
+        return ''; // Return an empty string or handle it as appropriate for your application
+    }
+
+    // Remove all whitespace and line breaks
+    let formattedCodes = codes.replace(/\s+/g, '');
+
+    // Ensure the string has an even number of characters by padding with '0' if necessary
+    if (formattedCodes.length % 2 !== 0) {
+        formattedCodes += '0';
+    }
+
+    // Insert a space every 8 characters and a line break every 16 characters
+    let result = '';
+    for (let i = 0; i < formattedCodes.length; i += 8) {
+        if (i > 0) {
+            if (i % 16 === 0) {
+                result += '\n'; // Line break every 16 characters
+            } else {
+                result += ' '; // Space every 8 characters
+            }
+        }
+        result += formattedCodes.substring(i, i + 8);
+    }
+
+    return result;
+};
+
 // In-memory storage for user-uploaded Delta Emulator data
-let userDeltaData = {}; // Structure: { shasum: { cheatName: { codes: '', is_enabled: true, is_bookmarked: true } } }
+let userDeltaData = {}; // Structure: { shasum: { cheatCode: { name: '', is_enabled: true } } }
 
 /**
  * Endpoint: POST /upload-rom
@@ -104,30 +136,25 @@ app.post('/upload-rom', upload.single('rom'), async (req, res) => {
     }
 
     // Check if user has uploaded a Delta SQLite and has cheats for this shasum
-    let userCheats = null;
+    let userCheats = {};
     if (userDeltaData[shasum]) {
-      userCheats = userDeltaData[shasum]; // { cheatName: { codes, is_enabled, is_bookmarked } }
+      userCheats = userDeltaData[shasum]; // { cheatCode: { name, is_enabled } }
     }
 
     // Prepare response data
     const responseData = {
       gameid: gameID,
+      game_identifier: shasum,
       game_name: cheatsData.name,
       folders: cheatsData.folders.map(folder => ({
         ...folder,
         cheats: folder.cheats.map(cheat => {
-          // If user has this cheat enabled/bookmarked, mark it
-          if (userCheats && userCheats[cheat.name]) {
-            return {
-              ...cheat,
-              is_enabled: userCheats[cheat.name].is_enabled,
-              is_bookmarked: userCheats[cheat.name].is_bookmarked
-            };
-          }
+          const formattedCheatCode = formatCheatCodes(cheat.codes);
+          const isEnabled = userCheats[formattedCheatCode]?.is_enabled || false;
           return {
             ...cheat,
-            is_enabled: false,
-            is_bookmarked: false
+            is_enabled: isEnabled,
+            is_bookmarked: isEnabled // Automatically bookmark if enabled
           };
         })
       }))
@@ -151,147 +178,122 @@ app.post('/upload-rom', upload.single('rom'), async (req, res) => {
 
 /**
  * Endpoint: POST /upload-delta
- * Description: Uploads an existing Delta Emulator SQLite file and parses cheats.
+ * Description: Uploads a Delta Emulator SQLite database file, parses it, and stores cheat data in memory.
  */
 app.post('/upload-delta', upload.single('delta'), async (req, res) => {
   try {
-    const uploadedFile = req.file;
-    if (!uploadedFile) {
-      return res.status(400).json({ error: 'No Delta Emulator SQLite file uploaded.' });
+    const deltaFile = req.file;
+    if (!deltaFile) {
+      return res.status(400).json({ error: 'No Delta SQLite file uploaded.' });
     }
 
-    if (!uploadedFile.originalname.toLowerCase().endsWith('.sqlite')) {
-      return res.status(400).json({ error: 'Invalid file format. Please upload a .sqlite file.' });
-    }
+    // Compute SHA1 hash of the uploaded file
+    const shasum = await computeShasum(deltaFile.path);
 
-    const shasum = req.session.currentGameShasum;
-    if (!shasum) {
-      return res.status(400).json({ error: 'Please upload a ROM file first to set the current game.' });
-    }
+    // Open the uploaded Delta database
+    const dbDelta = new Database(deltaFile.path, { readonly: true });
 
-    // Parse the uploaded SQLite file
-    const dbPath = uploadedFile.path;
-    const db = new Database(dbPath, { readonly: true });
-
-    // Extract cheats from ZCHEAT and link to ZGAME
-    const cheatsStmt = db.prepare(`
-      SELECT ZCHEAT.ZNAME as cheatName, ZCHEAT.ZCODE as cheatCodes, ZCHEAT.ZISENABLED as isEnabled, ZGAME.ZIDENTIFIER as identifier
+    // Get all cheats for the game from the ZCHEAT table
+    const cheatsStmt = dbDelta.prepare(`
+      SELECT ZCHEAT.ZISENABLED, ZCHEAT.ZCODE, ZCHEAT.ZNAME
       FROM ZCHEAT
-      JOIN ZGAME ON ZCHEAT.ZGAME = ZGAME.Z_PK
-      WHERE ZCHEAT.ZGAME IS NOT NULL
+      INNER JOIN ZGAME ON ZCHEAT.ZGAME = ZGAME.Z_PK
+      WHERE ZGAME.ZIDENTIFIER = ?
     `);
-    const rows = cheatsStmt.all();
+    const cheats = cheatsStmt.all(shasum);
 
-    // Log all identifiers present in the uploaded delta.sqlite
-    const presentIdentifiers = [...new Set(rows.map(row => row.identifier))];
-    console.log('Identifiers present in uploaded delta.sqlite:', presentIdentifiers);
-
-    // Log the shasum used for searching
-    console.log('Current Game Shasum:', shasum);
-
-    // **Verify that the identifier matches currentGameShasum**
-    const allMatch = rows.every(row => row.identifier === shasum);
-    if (!allMatch) {
-      db.close();
-      fs.unlink(dbPath, () => {}); // Delete the uploaded delta.sqlite
-      console.error('Delta SQLite does not match the uploaded ROM\'s shasum.');
-      return res.status(400).json({ error: 'Delta SQLite does not match the uploaded ROM\'s shasum.' });
-    }
-
-    // Organize cheats by shasum
-    rows.forEach(row => {
-      const { identifier, cheatName, cheatCodes, isEnabled } = row;
-      if (!userDeltaData[identifier]) {
-        userDeltaData[identifier] = {};
-      }
-      userDeltaData[identifier][cheatName] = {
-        codes: cheatCodes,
-        is_enabled: Boolean(isEnabled),
-        is_bookmarked: true // Assuming that uploaded cheats are bookmarked by default
+    // Organize cheats by code for efficient lookup
+    const userCheats = {};
+    cheats.forEach(cheat => {
+      const formattedCheatCode = formatCheatCodes(cheat.ZCODE);
+      userCheats[formattedCheatCode] = {
+        name: cheat.ZNAME,
+        is_enabled: cheat.ZISENABLED === 1
       };
     });
 
-    // Move the delta.sqlite to deltasDir with filename as shasum
-    const deltaDestinationPath = path.join(deltasDir, `${shasum}.sqlite`);
-    fs.renameSync(dbPath, deltaDestinationPath);
+    // Store in memory, keyed by shasum
+    userDeltaData[shasum] = userCheats;
 
-    // Clean up uploaded SQLite file
-    db.close();
+    // Close the Delta database
+    dbDelta.close();
 
-    res.json({ message: 'Delta Emulator SQLite file uploaded and parsed successfully.' });
+    // Move the uploaded file to the deltas directory
+    const newDeltaPath = path.join(deltasDir, `${shasum}.sqlite`);
+    fs.renameSync(deltaFile.path, newDeltaPath);
+
+    res.json({ message: 'Delta SQLite file uploaded and parsed successfully.' });
 
   } catch (error) {
     console.error('Error in /upload-delta:', error);
-    res.status(500).json({ error: 'Failed to parse Delta Emulator SQLite file.' });
+    res.status(500).json({ error: 'Failed to process Delta SQLite file.' });
   }
 });
 
 /**
  * Endpoint: POST /generate-delta
- * Description: Generates a modified Delta-compatible SQLite database based on selected cheats.
+ * Description: Generates a modified Delta-compatible SQLite database with selected cheats.
  */
 app.post('/generate-delta', async (req, res) => {
   try {
     const { gameid, game_name, selectedCheats } = req.body;
-
-    if (!gameid || !game_name || !Array.isArray(selectedCheats) || selectedCheats.length === 0) {
-      return res.status(400).json({ error: 'Invalid request data. Ensure gameid, game_name, and selectedCheats are provided.' });
+    if (!gameid || !game_name || !Array.isArray(selectedCheats)) {
+      return res.status(400).json({ error: 'Invalid request data.' });
     }
 
+    // Use the shasum stored in the session
     const shasum = req.session.currentGameShasum;
     if (!shasum) {
-      return res.status(400).json({ error: 'No game has been set. Please upload a ROM first.' });
+      return res.status(400).json({ error: 'No game identifier (shasum) found in session.' });
     }
 
-    // Path to the existing delta.sqlite associated with shasum
+    // Find the path to the uploaded Delta SQLite file
     const deltaDbPath = path.join(deltasDir, `${shasum}.sqlite`);
-
     if (!fs.existsSync(deltaDbPath)) {
-      return res.status(400).json({ error: 'No Delta Emulator SQLite file uploaded for the current game.' });
+      return res.status(404).json({ error: 'Delta SQLite file not found for this game.' });
     }
 
-    // Modify the existing delta.sqlite with selected cheats
-    const dbBuffer = await modifyDeltaDatabase(deltaDbPath, shasum, selectedCheats); // Pass shasum as identifier
+    // Modify the Delta database
+    const modifiedDbBuffer = await modifyDeltaDatabase(deltaDbPath, shasum, selectedCheats);
 
-    // Overwrite the existing delta.sqlite with modifications
-    fs.writeFileSync(deltaDbPath, dbBuffer);
-
-    // Log the shasum used for generation
-    console.log('Generating modified delta.sqlite for shasum:', shasum);
-
-    // Send the modified delta.sqlite back to the user
-    res.setHeader('Content-Disposition', 'attachment; filename=delta_cheats_modified.sqlite');
-    res.setHeader('Content-Type', 'application/vnd.sqlite3');
-    res.send(dbBuffer);
+    // Send the modified database as a download
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="delta_cheats_modified.sqlite"`);
+    res.send(modifiedDbBuffer);
 
   } catch (error) {
     console.error('Error in /generate-delta:', error);
-    res.status(500).json({ error: 'Failed to generate modified Delta SQLite database.' });
+    res.status(500).json({ error: 'Failed to generate Delta SQLite.' });
   }
 });
 
 /**
  * Endpoint: GET /api/games
- * Description: Retrieves all games and their cheats with enabled status.
+ * Description: Retrieves all games and their cheats, with user-enabled cheats merged in.
  */
 app.get('/api/games', (req, res) => {
   try {
     const allGames = [];
 
-    // Iterate through userDeltaData to get games and cheats
-    for (const [shasum, cheats] of Object.entries(userDeltaData)) {
-      // Retrieve game name from cheatsData using GameID
-      const gameInfo = getCheatsForGameID(req.session.currentGameID); // Assuming single game per session
-      if (gameInfo) {
-        const gameName = gameInfo.name;
-        const folders = gameInfo.folders.map(folder => ({
+    for (const shasum in userDeltaData) {
+      const cheats = userDeltaData[shasum];
+      const gameName = Object.values(cheats).find(cheat => cheat.name)?.name || 'Unknown Game';
+
+      // Find corresponding cheats from cheats.xml using gameid (shasum)
+      const gameCheatsData = getCheatsForGameID(shasum);
+      if (gameCheatsData) {
+        const folders = gameCheatsData.folders.map(folder => ({
           folder_name: folder.folder_name,
-          cheats: folder.cheats.map(cheat => ({
-            name: cheat.name,
-            codes: cheat.codes,
-            is_enabled: cheats[cheat.name]?.is_enabled || false,
-            is_bookmarked: cheats[cheat.name]?.is_bookmarked || false
-          }))
+          cheats: folder.cheats.map(cheat => {
+            const formattedCheatCode = formatCheatCodes(cheat.codes);
+            return {
+              name: cheat.name,
+              notes: cheat.notes,
+              codes: cheat.codes,
+              is_enabled: cheats[formattedCheatCode]?.is_enabled || false,
+              is_bookmarked: cheats[formattedCheatCode]?.is_enabled || false
+            };
+          })
         }));
 
         allGames.push({
@@ -329,10 +331,10 @@ app.post('/save-bookmarks', (req, res) => {
     deleteStmt.run(gameid);
 
     // Insert new bookmarks
-    const insertStmt = dbBookmarks.prepare('INSERT INTO bookmarks (gameid, cheat_name) VALUES (?, ?)');
+    const insertStmt = dbBookmarks.prepare('INSERT INTO bookmarks (gameid, cheat_name, cheat_code) VALUES (?, ?, ?)');
     const insertMany = dbBookmarks.transaction((cheats) => {
       cheats.forEach(cheat => {
-        insertStmt.run(gameid, cheat);
+        insertStmt.run(gameid, cheat.name, cheat.code);
       });
     });
 
@@ -360,9 +362,9 @@ app.get('/get-bookmarks', (req, res) => {
       return res.status(400).json({ error: 'GameID is required.' });
     }
 
-    const stmt = dbBookmarks.prepare('SELECT cheat_name FROM bookmarks WHERE gameid = ?');
+    const stmt = dbBookmarks.prepare('SELECT cheat_name, cheat_code FROM bookmarks WHERE gameid = ?');
     const rows = stmt.all(gameid);
-    const bookmarks = rows.map(row => row.cheat_name);
+    const bookmarks = rows.map(row => ({ name: row.cheat_name, code: row.cheat_code }));
 
     // Log the retrieved bookmarks
     console.log(`Retrieved bookmarks for gameid ${gameid}:`, bookmarks);
@@ -391,8 +393,8 @@ app.get('/get-bookmarks', (req, res) => {
   }
 
   try {
-    const bookmarks = dbBookmarks.prepare('SELECT cheat_name FROM bookmarks WHERE gameid = ?').all(gameid);
-    res.json({ bookmarks: bookmarks.map(b => b.cheat_name) });
+    const bookmarks = dbBookmarks.prepare('SELECT cheat_name, cheat_code FROM bookmarks WHERE gameid = ?').all(gameid);
+    res.json({ bookmarks: bookmarks.map(b => ({ name: b.cheat_name, code: b.cheat_code })) });
   } catch (error) {
     console.error('Error fetching bookmarks:', error);
     res.status(500).json({ error: 'Failed to fetch bookmarks.' });
@@ -412,9 +414,9 @@ app.post('/save-bookmarks', (req, res) => {
       dbBookmarks.prepare('DELETE FROM bookmarks WHERE gameid = ?').run(gameid);
 
       // Insert new bookmarks
-      const insert = dbBookmarks.prepare('INSERT INTO bookmarks (gameid, cheat_name) VALUES (?, ?)');
-      bookmarks.forEach(cheatName => {
-        insert.run(gameid, cheatName);
+      const insert = dbBookmarks.prepare('INSERT INTO bookmarks (gameid, cheat_name, cheat_code) VALUES (?, ?, ?)');
+      bookmarks.forEach(cheat => {
+        insert.run(gameid, cheat.name, cheat.code);
       });
     })();
 
@@ -429,10 +431,34 @@ app.post('/save-bookmarks', (req, res) => {
 app.get('/api/bookmarks', (req, res) => {
   try {
     const allBookmarks = dbBookmarks.prepare('SELECT * FROM bookmarks').all();
-    res.json({ bookmarks: allBookmarks });
+    res.json({ bookmarks: allBookmarks.map(b => ({ name: b.cheat_name, gameid: b.gameid, code: b.cheat_code })) });
   } catch (error) {
     console.error('Error fetching all bookmarks:', error);
     res.status(500).json({ error: 'Failed to fetch all bookmarks.' });
+  }
+});
+
+/**
+ * Endpoint: POST /update-cheats
+ * Description: Updates cheat data for a specific game.
+ */
+app.post('/update-cheats', (req, res) => {
+  const { gameid, cheats } = req.body;
+  if (!gameid || !Array.isArray(cheats)) {
+    return res.status(400).json({ error: 'Invalid request data.' });
+  }
+
+  try {
+    // Update the in-memory cheatsData object
+    if (cheatsData[gameid]) {
+      cheatsData[gameid].folders = cheats;
+      // Optionally, you can also update the cheats.xml file here if needed
+    }
+
+    res.json({ message: 'Cheats updated successfully.' });
+  } catch (error) {
+    console.error('Error updating cheats:', error);
+    res.status(500).json({ error: 'Failed to update cheats.' });
   }
 });
 
